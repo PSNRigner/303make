@@ -1,0 +1,167 @@
+import sys
+
+make_vars = dict()
+make_rules = dict()
+main_rule = None
+current_rule = None
+
+
+class ParseException(Exception):
+    def __init__(self, comment):
+        super().__init__(comment)
+
+
+def parse_value(string):
+    if len(string) > 2 and string[0] == '$' and string[1] == '(' and string[len(string) - 1] == ')':
+        var_name = string[2:-1]
+        if var_name == "":
+            raise ParseException("Empty variable name")
+
+        rep = None
+        j1 = var_name.find(":")
+        j2 = var_name.find("=")
+
+        if j1 != -1 and j2 > j1:
+            rep = (var_name[j1 + 1:j2], var_name[j2 + 1:])
+            var_name = var_name[:j1]
+
+        val = make_vars.get(var_name, None)
+        if val is None:
+            raise ParseException("Unknown variable %s" % var_name)
+        else:
+            if rep is not None:
+                val = val.replace(rep[0], rep[1])
+            # Don't know why, so cancel warning
+            # noinspection PyTypeChecker
+            return parse_value(val)
+    return string
+
+
+def recur(lst, current, first=False):
+    rul = current[len(current) - 1]
+    val = make_rules.get(rul, None)
+    if not first:
+        lst.append(list(reversed(current.copy())))
+    if val is not None:
+        for de in val[0]:
+            cu = current.copy()
+            cu.append(de)
+            recur(lst, cu)
+    pass
+
+
+def strip(string):
+    while len(string) > 0 and (string[0] == " " or string[0] == "\t"):
+        string = string.strip(" ").strip("\t")
+    while len(string) > 0 and (string[len(string) - 1] == " " or string[len(string) - 1] == "\t"):
+        string = string.strip(" ").strip("\t")
+    return string
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage : " + sys.argv[0] + " Makefile [file]")
+        exit(84)
+
+    modified = None
+    if len(sys.argv) > 2:
+        modified = list()
+        for i in range(3, len(sys.argv)):
+            modified.append(sys.argv[i])
+
+    file = None
+    no = 0
+    try:
+        file = open(sys.argv[1])
+
+        for line in file:
+            no += 1
+            line = line.strip("\n").split("#")[0]
+            if line == "":
+                continue
+
+            i1 = line.find("=")
+            i2 = line.find(":")
+
+            if i1 != -1:
+                var = strip(line[:i1])
+                value = parse_value(strip(line[i1 + 1:]))
+                make_vars[var] = value
+
+            elif i2 != -1:
+                rule = parse_value(strip(line[:i2]))
+                dep = strip(line[i2 + 1:])
+                dep = dep.split(" ")
+                for i in range(0, len(dep)):
+                    dep[i] = parse_value(dep[i])
+                make_rules[rule] = (dep, list())
+                current_rule = make_rules[rule]
+                if main_rule is None:
+                    main_rule = rule
+
+            elif len(line) > 0 and line[0] == "\t":
+                cmd = strip(line)
+                split = cmd.split(" ")
+                for i in range(0, len(split)):
+                    split[i] = parse_value(split[i])
+                cmd = " ".join(split)
+                if current_rule is None:
+                    raise ParseException("Unexpected line")
+                current_rule[1].append(cmd)
+
+            else:
+                raise ParseException("Unexpected line")
+
+    except ParseException as ex:
+        print("Parse error at line %d : %s" % (no, ex))
+        exit(84)
+
+    except Exception as ex:
+        print("Error at line %d : %s" % (no, ex))
+        exit(84)
+
+    finally:
+        if file is not None:
+            file.close()
+
+    names = set()
+    for r, c in make_rules.items():
+        names.add(r)
+        for d in c[0]:
+            names.add(d)
+    names = sorted(names)
+
+    if modified is None:
+        for name in names:
+            values = []
+            v = make_rules.get(name, None)
+            for name2 in names:
+                if v is not None and name2 in v[0]:
+                    values.append(1)
+                else:
+                    values.append(0)
+            print("[", end="")
+            for i in range(0, len(values)):
+                print(values[i], end="")
+                print(" " if i != len(values) - 1 else "]", end="")
+            print()
+        print()
+
+    tree = list()
+    if main_rule is not None:
+        cur = list()
+        cur.append(main_rule)
+        recur(tree, cur, True)
+    tree = sorted(tree)
+
+    if modified is None:
+        for branch in tree:
+            for i in range(0, len(branch)):
+                print(branch[i], end="")
+                print(" -> " if i != len(branch) - 1 else "", end="")
+            print()
+
+    if modified is not None:
+        # TODO
+        pass
+    exit(0)
