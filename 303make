@@ -66,7 +66,7 @@ if __name__ == "__main__":
     modified = None
     if len(sys.argv) > 2:
         modified = list()
-        for i in range(3, len(sys.argv)):
+        for i in range(2, len(sys.argv)):
             modified.append(sys.argv[i])
 
     file = None
@@ -162,6 +162,22 @@ if __name__ == "__main__":
             print()
 
     if modified is not None:
-        # TODO
-        pass
+        # Don't know why, so cancel warning
+        # noinspection PyTypeChecker
+        for m in modified:
+            ok = False
+            for branch in tree:
+                if branch[0] == m:
+                    for i in range(1, len(branch)):
+                        r = make_rules.get(branch[i], None)
+                        if not r:
+                            print("Unknown rule %s" % branch[i])
+                            exit(84)
+                        for r2 in r[1]:
+                            print(r2)
+                    ok = True
+            if not ok and m != main_rule:
+                print("Unknown file %s" % m)
+                exit(84)
+
     exit(0)
